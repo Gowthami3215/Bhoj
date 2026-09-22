@@ -2,7 +2,6 @@
 window.renderRecipeDetail = function (queryParam) {
     const container = document.getElementById('view-recipe-detail');
 
-    // Extract recipe ID from URL
     let recipeId = null;
     if (typeof queryParam === 'string' && queryParam.startsWith('?')) {
         const params = new URLSearchParams(queryParam);
@@ -13,138 +12,134 @@ window.renderRecipeDetail = function (queryParam) {
     }
 
     if (!recipeId) {
-        container.innerHTML = `
-            <div class="container section-padding text-center">
-                <h2>Recipe not found.</h2>
-                <button class="btn btn-primary mt-4" onclick="window.navigateTo('recipes')">Back to Recipes</button>
-            </div>`;
+        container.innerHTML = `<div class="container section-padding text-center"><h2>Recipe not found.</h2><button class="btn btn-primary mt-4" onclick="window.navigateTo('recipes')">Back to Recipes</button></div>`;
         return;
     }
 
     const recipe = window.BhojData.recipes.find(r => r.id === recipeId);
 
     if (!recipe) {
-        container.innerHTML = `
-            <div class="container section-padding text-center">
-                <h2>Recipe not found.</h2>
-                <button class="btn btn-primary mt-4" onclick="window.navigateTo('recipes')">Back to Recipes</button>
-            </div>`;
+        container.innerHTML = `<div class="container section-padding text-center"><h2>Recipe not found.</h2><button class="btn btn-primary mt-4" onclick="window.navigateTo('recipes')">Back to Recipes</button></div>`;
         return;
     }
 
     const pantry = window.BhojInventory ? window.BhojInventory.get() : [];
 
-    // Process ingredients and match with pantry
-    let availableCount = 0;
-    let missingCount = 0;
-    let expiringCount = 0;
-    let expiringNames = [];
-
-    const processedIngredients = recipe.ingredients.map(ing => {
-        // Find matching item in pantry that is NOT expired (daysRemaining >= 0)
-        const pantryItem = pantry.find(p => p.name.toLowerCase() === ing.name.toLowerCase());
-        const isAvailable = pantryItem && pantryItem.daysRemaining >= 0;
-        const isExpiring = isAvailable && pantryItem.daysRemaining <= 3;
-
-        if (isAvailable) {
-            availableCount++;
-            if (isExpiring) {
-                expiringCount++;
-                expiringNames.push(ing.name);
+    function scaleIngredients(ingredients, baseServings, selectedServings) {
+        return ingredients.map(ing => {
+            const originalQty = parseFloat(ing.quantity);
+            let scaledQty = originalQty;
+            if (!isNaN(originalQty)) {
+                scaledQty = (originalQty * selectedServings) / baseServings;
             }
-        } else {
-            missingCount++;
-        }
+            return { ...ing, scaledQuantity: scaledQty };
+        });
+    }
 
-        return {
-            ...ing,
-            isAvailable,
-            isExpiring,
-            pantryItem
-        };
-    });
-
-    let ingredientsHtml = '';
-    processedIngredients.forEach(ing => {
-        let iconHtml = ing.isAvailable
-            ? '<span style="color: var(--color-success);"><i class="fa-solid fa-check"></i></span>'
-            : '<span style="color: #999;"><i class="fa-regular fa-circle"></i></span>';
-        let nameHtml = ing.name;
-        let expiryHtml = '';
-
-        if (ing.isExpiring) {
-            nameHtml = `<span style="color: var(--color-danger); font-weight: 600;">🔥 ${ing.name}</span>`;
-            let daysText = ing.pantryItem.daysRemaining === 0 ? "Expires today" :
-                ing.pantryItem.daysRemaining === 1 ? "Expires tomorrow" :
-                    `Expires in ${ing.pantryItem.daysRemaining} days`;
-            expiryHtml = `<div style="font-size: 0.75rem; color: var(--color-danger); margin-top: 2px;">${daysText}</div>`;
-        }
-
-        ingredientsHtml += `
-            <li style="padding: 12px 0; border-bottom: 1px solid #eee;">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                    <div style="display: flex; gap: 10px; align-items: flex-start;">
-                        <div style="margin-top: 2px;">${iconHtml}</div>
-                        <div>
-                            <div>${nameHtml}</div>
-                            ${expiryHtml}
-                        </div>
-                    </div>
-                    <span style="font-weight: 600; color: var(--color-primary);">${ing.quantity} ${ing.unit}</span>
-                </div>
-            </li>
-        `;
-    });
-
-    // Ingredient availability summary
-    let pantrySummaryHtml = `
-        <div style="background-color: var(--color-bg); padding: 15px; border-radius: var(--radius-sm); margin-bottom: 20px;">
-            <h4 style="margin-bottom: 10px; font-size: 0.85rem; color: #666; letter-spacing: 1px;">YOUR PANTRY</h4>
-            <div style="display: flex; flex-direction: column; gap: 5px; font-size: 0.9rem;">
-                ${availableCount > 0 ? `<div style="color: var(--color-success);"><i class="fa-solid fa-check" style="margin-right: 5px;"></i> ${availableCount} ingredient${availableCount > 1 ? 's' : ''} available</div>` : ''}
-                ${missingCount > 0 ? `<div style="color: #999;"><i class="fa-regular fa-circle" style="margin-right: 5px;"></i> ${missingCount} ingredient${missingCount > 1 ? 's' : ''} missing</div>` : ''}
-            </div>
-            <div style="margin-top: 10px; font-weight: 500; font-size: 0.9rem; color: #444;">
-                ${availableCount === 0 ? "You don't currently have the main ingredients for this recipe." :
-            missingCount === 0 ? "You already have most of what you need!" :
-                "You have some of the ingredients needed."}
-            </div>
-        </div>
-    `;
-
-    let recommendationReason = '';
-    
-    // Explicitly find matched names from processedIngredients
-    const matchedNames = processedIngredients.filter(i => i.isAvailable).map(i => i.name);
-    
-    if (expiringCount > 0) {
-        let msg = expiringCount === 1
-            ? `Your ${expiringNames[0]} expires soon and this recipe uses it.`
-            : `This recipe helps you use ${expiringCount} ingredients approaching expiry.`;
-
-        recommendationReason = `
-        <div style="background-color: var(--color-warning-bg); padding: 20px; border-radius: var(--radius-md); margin-bottom: 30px; border-left: 4px solid var(--color-warning);">
-            <h4 style="color: #856404; margin-bottom: 10px;"><i class="fa-solid fa-lightbulb"></i> Why Bhoj Recommended This</h4>
-            <p style="margin: 0; color: #856404; font-size: 0.95rem;">
-                ${msg}
-            </p>
-        </div>`;
-    } else if (availableCount > 0) {
-        // Build "Uses X, Y and Z available in your pantry."
-        let matchedStr = "";
-        if (matchedNames.length === 1) matchedStr = matchedNames[0];
-        else if (matchedNames.length === 2) matchedStr = matchedNames.join(' and ');
-        else {
-            matchedStr = matchedNames.slice(0, -1).join(', ') + ' and ' + matchedNames[matchedNames.length - 1];
-        }
+    // Main Update Function
+    function renderIngredientsBlock(selectedServings) {
+        const baseServings = recipe.servings || 2;
+        const scaledIngredients = scaleIngredients(recipe.ingredients, baseServings, selectedServings);
         
-        recommendationReason = `
-        <div style="background-color: var(--color-success-bg); padding: 20px; border-radius: var(--radius-md); margin-bottom: 30px; border-left: 4px solid var(--color-success);">
-            <h4 style="color: #155724; margin-bottom: 10px;"><i class="fa-solid fa-lightbulb"></i> Why Bhoj Recommended This</h4>
-            <p style="margin: 0; color: #155724; font-size: 0.95rem;">
-                Uses ${matchedStr} available in your pantry.
-            </p>
-        </div>`;
+        let availableCount = 0;
+        let missingCount = 0;
+        let expiringCount = 0;
+        let expiringNames = [];
+
+        const processedIngredients = scaledIngredients.map(ing => {
+            const pantryItem = pantry.find(p => window.BhojRecommendation.areIngredientsRelated(ing.name, p.name));
+            
+            let status = 'missing'; 
+            let comparison = { text: 'Not in pantry' };
+            
+            if (pantryItem) {
+                const isExpired = pantryItem.daysRemaining < 0;
+                if (isExpired) {
+                    status = 'expired';
+                    comparison = { text: '<span style="color:var(--color-danger)">⚠ Expired</span>' };
+                } else {
+                    if (ing.scaledQuantity > 0 && pantryItem.quantity) {
+                        const comp = window.BhojRecommendation.compareQuantities(ing.scaledQuantity, ing.unit, pantryItem.quantity);
+                        status = comp.status;
+                        comparison = comp;
+                    } else {
+                        status = 'available';
+                        comparison = { text: `Available: ${pantryItem.quantity || 'Yes'}` };
+                    }
+                    
+                    if (status === 'available') availableCount++;
+                    else if (status === 'short') missingCount++;
+                    
+                    if (pantryItem.daysRemaining >= 0 && pantryItem.daysRemaining <= 3) {
+                        expiringCount++;
+                        expiringNames.push(ing.name);
+                    }
+                }
+            } else {
+                missingCount++;
+            }
+
+            return { ...ing, status, comparison, pantryItem };
+        });
+
+        let ingredientsHtml = '';
+        processedIngredients.forEach(ing => {
+            let iconHtml = '';
+            if (ing.status === 'available') iconHtml = '<span style="color: var(--color-success);"><i class="fa-solid fa-check"></i></span>';
+            else if (ing.status === 'expired') iconHtml = '<span style="color: var(--color-danger);"><i class="fa-solid fa-triangle-exclamation"></i></span>';
+            else if (ing.status === 'short') iconHtml = '<span style="color: var(--color-warning);"><i class="fa-solid fa-triangle-exclamation"></i></span>';
+            else iconHtml = '<span style="color: #999;"><i class="fa-regular fa-circle"></i></span>';
+            
+            let nameHtml = ing.name;
+            if (ing.pantryItem && ing.pantryItem.daysRemaining >= 0 && ing.pantryItem.daysRemaining <= 3) {
+                nameHtml = `<span style="color: var(--color-danger); font-weight: 600;">🔥 ${ing.name}</span>`;
+            }
+
+            ingredientsHtml += `
+                <li style="padding: 12px 0; border-bottom: 1px solid #eee;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div style="display: flex; gap: 10px; align-items: flex-start;">
+                            <div style="margin-top: 2px;">${iconHtml}</div>
+                            <div>
+                                <div style="font-weight: 500;">${nameHtml}</div>
+                                <div style="font-size: 0.85rem; color: #666; margin-top: 4px;">${ing.comparison.text}</div>
+                            </div>
+                        </div>
+                        <span style="font-weight: 600; color: var(--color-primary); text-align: right;">
+                            ${isNaN(ing.scaledQuantity) ? ing.quantity : window.BhojRecommendation.formatQuantity(ing.scaledQuantity)} ${ing.unit}
+                        </span>
+                    </div>
+                </li>
+            `;
+        });
+
+        let pantrySummaryHtml = `
+            <div style="background-color: var(--color-bg); padding: 15px; border-radius: var(--radius-sm); margin-bottom: 20px;">
+                <h4 style="margin-bottom: 10px; font-size: 0.85rem; color: #666; letter-spacing: 1px;">YOUR PANTRY</h4>
+                <div style="display: flex; flex-direction: column; gap: 5px; font-size: 0.9rem;">
+                    ${availableCount > 0 ? `<div style="color: var(--color-success);"><i class="fa-solid fa-check" style="margin-right: 5px;"></i> ${availableCount} ingredient${availableCount > 1 ? 's' : ''} available</div>` : ''}
+                    ${missingCount > 0 ? `<div style="color: #999;"><i class="fa-regular fa-circle" style="margin-right: 5px;"></i> ${missingCount} ingredient${missingCount > 1 ? 's' : ''} missing or short</div>` : ''}
+                </div>
+            </div>
+        `;
+
+        // Create a fake recipe object to reuse our global recommendation logic
+        const fakeRecipe = { ...recipe };
+        const scored = window.BhojRecommendation.calculateAdvancedRecipeScore(fakeRecipe, pantry, "");
+        fakeRecipe.matchData = scored.matchData;
+        const dynamicReason = window.BhojRecommendation.generateRecommendationReason(fakeRecipe);
+        
+        let recommendationReasonHtml = '';
+        if (dynamicReason) {
+            let isUrgent = dynamicReason.includes('🔥');
+            recommendationReasonHtml = `
+            <div style="background-color: ${isUrgent ? 'var(--color-danger-bg)' : 'var(--color-success-bg)'}; color: ${isUrgent ? 'var(--color-danger)' : 'var(--color-success)'}; padding: 20px; border-radius: var(--radius-md); margin-bottom: 30px; border-left: 4px solid ${isUrgent ? 'var(--color-danger)' : 'var(--color-success)'};">
+                <h4 style="margin-bottom: 10px;"><i class="fa-solid fa-lightbulb"></i> Why Bhoj Recommended This</h4>
+                <p style="margin: 0; font-size: 0.95rem;">${dynamicReason}</p>
+            </div>`;
+        }
+
+        return { pantrySummaryHtml, ingredientsHtml, recommendationReason: recommendationReasonHtml };
     }
 
     let stepsHtml = '';
@@ -152,7 +147,6 @@ window.renderRecipeDetail = function (queryParam) {
     recipe.steps.forEach((step, index) => {
         let title = typeof step === 'object' && step.title ? step.title : "Step";
         let desc = typeof step === 'object' && step.description ? step.description : step;
-
         stepsHtml += `
             <div class="step-item" data-step="${index}" style="margin-bottom: 20px; padding: 20px; border-radius: var(--radius-md); border: 1px solid #eee; background: white; cursor: pointer; transition: var(--transition);">
                 <div style="display: flex; gap: 20px;">
@@ -172,36 +166,20 @@ window.renderRecipeDetail = function (queryParam) {
     });
 
     function getRecipeVideo(recipe) {
-        let videoUrl = recipe.videoUrl;
-        if (videoUrl && videoUrl.includes('youtube.com/watch?v=')) {
-            videoUrl = videoUrl.replace('watch?v=', 'embed/');
-            const ampersandPosition = videoUrl.indexOf('&');
-            if(ampersandPosition !== -1) {
-                videoUrl = videoUrl.substring(0, ampersandPosition);
-            }
-        }
-        
-        const hasVideo = videoUrl && videoUrl !== '' && videoUrl.includes('embed');
-
-        if (hasVideo) {
-            return `
-                <div style="position: relative; border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 30px; background-color: #000; box-shadow: var(--shadow-md); padding-top: 56.25%;">
-                    <iframe src="${videoUrl}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0;" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
-                </div>
-            `;
-        } else {
-            return `
-                <div style="background-color: #f8f9fa; border: 1px solid #e9ecef; border-radius: var(--radius-lg); padding: 40px; text-align: center; margin-bottom: 30px; color: #6c757d;">
-                    <i class="fa-solid fa-video-slash" style="font-size: 2rem; margin-bottom: 10px; color: #adb5bd;"></i>
-                    <p style="margin: 0; font-weight: 500;">Detailed cooking video currently unavailable for this recipe.</p>
-                </div>
-            `;
-        }
+        return `
+            <div style="background-color: #f8f9fa; border: 1px solid #e9ecef; border-radius: var(--radius-lg); padding: 40px; text-align: center; margin-bottom: 30px; color: #6c757d;">
+                <span style="font-size: 3rem; margin-bottom: 10px; display: block;">🎥</span>
+                <h3 style="margin-bottom: 10px; color: #333;">Cooking Video Coming Soon</h3>
+                <p style="margin: 0; font-weight: 500; font-size: 1rem;">We're working on adding a detailed cooking video<br>for this recipe.</p>
+            </div>
+        `;
     }
 
     const videoHtml = getRecipeVideo(recipe);
-
     const isVeg = recipe.tags && recipe.tags.includes("Vegetarian");
+    
+    let currentServings = recipe.servings || 2;
+    const initBlocks = renderIngredientsBlock(currentServings);
 
     container.innerHTML = `
         <div class="container" style="padding: 40px 20px;">
@@ -209,17 +187,18 @@ window.renderRecipeDetail = function (queryParam) {
                 <i class="fa-solid fa-arrow-left" style="margin-right: 5px;"></i> Back to Recipes
             </button>
 
-            <!-- Video Section -->
             ${videoHtml}
 
-            <!-- Desktop Layout -->
             <div style="display: flex; flex-wrap: wrap; gap: 40px;">
-                
-                <!-- Left: Info & Steps -->
                 <div style="flex: 1; min-width: 320px;">
                     <h1 style="margin-bottom: 15px;">${recipe.title}</h1>
                     <p style="font-size: 1.15rem; color: #555; margin-bottom: 25px; line-height: 1.6;">${recipe.description}</p>
                     
+                    <div style="margin-bottom: 25px;">
+                        <button id="mark-cooked-btn" class="btn btn-primary" style="padding: 10px 20px; font-weight: bold;">
+                            <i class="fa-solid fa-fire-burner"></i> Mark Recipe as Cooked
+                        </button>
+                    </div>
                     <div style="display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 35px;">
                         <span class="badge" style="display:flex; align-items:center; gap:6px; background: #f0f0f0; color: #333; font-size: 0.9rem; padding: 6px 14px;">
                             <i class="fa-regular fa-clock"></i> ${recipe.time} min
@@ -231,43 +210,41 @@ window.renderRecipeDetail = function (queryParam) {
                             ${isVeg ? '<i class="fa-solid fa-leaf"></i> Vegetarian' : '<i class="fa-solid fa-drumstick-bite"></i> Non-Vegetarian'}
                         </span>
                         <span class="badge" style="display:flex; align-items:center; gap:6px; background: #f0f0f0; color: #333; font-size: 0.9rem; padding: 6px 14px;">
-                            <i class="fa-solid fa-utensils"></i> Serves <span id="serve-badge-count">${recipe.servings || 2}</span>
+                            <i class="fa-solid fa-utensils"></i> Serves <span id="serve-badge-count">${currentServings}</span>
                         </span>
                     </div>
 
-                    ${recommendationReason}
-                    
-                    <!-- Mobile view shows ingredients here normally in DOM flow if we used media queries. 
-                         With flex-wrap, if screen is small, the Right column wraps below Left column.
-                         But we want Steps below Ingredients. So we put Steps outside this container. -->
+                    <div id="recommendation-reason-container">
+                        ${initBlocks.recommendationReason}
+                    </div>
                 </div>
 
-                <!-- Right: Ingredients -->
                 <div style="flex: 0 0 350px; min-width: 320px;">
                     <div class="card" style="padding: 30px;">
                         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 25px;">
-                            <h3 style="margin: 0; font-size: 1.2rem; letter-spacing: 0.5px;">INGREDIENTS</h3>
+                            <h3 style="margin: 0; font-size: 1.2rem; letter-spacing: 0.5px;">INGREDIENTS <br><span style="font-size: 0.8rem; font-weight: normal; color: #666;">for <span id="serve-title-count">${currentServings}</span> people</span></h3>
                             
                             <div style="display: flex; flex-direction: column; align-items: flex-end;">
                                 <div style="font-size: 0.75rem; color: #999; margin-bottom: 8px; font-weight: 600; letter-spacing: 1px;">SERVINGS</div>
                                 <div style="display: flex; align-items: center; background-color: var(--color-bg); border-radius: var(--radius-pill); padding: 5px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);">
-                                    <button id="serve-minus" aria-label="Decrease servings" style="width: 32px; height: 32px; border-radius: 50%; border: none; background: white; cursor: pointer; box-shadow: var(--shadow-sm); display: flex; align-items: center; justify-content: center; color: var(--color-text);"><i class="fa-solid fa-minus"></i></button>
-                                    <span id="serve-count" style="padding: 0 15px; font-weight: 700; min-width: 45px; text-align: center; font-size: 1.1rem; color: var(--color-primary);">${recipe.servings || 2}</span>
-                                    <button id="serve-plus" aria-label="Increase servings" style="width: 32px; height: 32px; border-radius: 50%; border: none; background: white; cursor: pointer; box-shadow: var(--shadow-sm); display: flex; align-items: center; justify-content: center; color: var(--color-text);"><i class="fa-solid fa-plus"></i></button>
+                                    <button id="serve-minus" style="width: 32px; height: 32px; border-radius: 50%; border: none; background: white; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--color-text);"><i class="fa-solid fa-minus"></i></button>
+                                    <span id="serve-count" style="padding: 0 15px; font-weight: 700; min-width: 45px; text-align: center; font-size: 1.1rem; color: var(--color-primary);">${currentServings}</span>
+                                    <button id="serve-plus" style="width: 32px; height: 32px; border-radius: 50%; border: none; background: white; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--color-text);"><i class="fa-solid fa-plus"></i></button>
                                 </div>
                             </div>
                         </div>
                         
-                        ${pantrySummaryHtml}
+                        <div id="pantry-summary-container">
+                            ${initBlocks.pantrySummaryHtml}
+                        </div>
                         
-                        <ul style="list-style: none; padding: 0; margin: 0;">
-                            ${ingredientsHtml}
+                        <ul id="ingredients-list-container" style="list-style: none; padding: 0; margin: 0;">
+                            ${initBlocks.ingredientsHtml}
                         </ul>
                     </div>
                 </div>
             </div>
 
-            <!-- Bottom: Full width steps -->
             <div style="margin-top: 50px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; flex-wrap: wrap; gap: 15px;">
                     <h3 style="margin: 0; font-size: 1.4rem; letter-spacing: 0.5px;">HOW TO MAKE IT</h3>
@@ -275,39 +252,63 @@ window.renderRecipeDetail = function (queryParam) {
                         <span id="step-progress" style="color: var(--color-primary); font-weight: 600; font-size: 0.95rem;">0 of ${totalSteps} steps completed</span>
                     </div>
                 </div>
-                <div>
-                    ${stepsHtml}
-                </div>
+                <div>${stepsHtml}</div>
             </div>
         </div>
     `;
 
-    // Interactivity for servings
     setTimeout(() => {
-        let currentServings = recipe.servings || 2;
         const countSpan = document.getElementById('serve-count');
         const badgeCountSpan = document.getElementById('serve-badge-count');
+        const titleCountSpan = document.getElementById('serve-title-count');
         const minusBtn = document.getElementById('serve-minus');
         const plusBtn = document.getElementById('serve-plus');
+        
+        const summaryCont = document.getElementById('pantry-summary-container');
+        const listCont = document.getElementById('ingredients-list-container');
+        const recCont = document.getElementById('recommendation-reason-container');
+
+        const markCookedBtn = document.getElementById('mark-cooked-btn');
+        if (markCookedBtn) {
+            markCookedBtn.addEventListener('click', () => {
+                if (window.BhojActivity) {
+                    window.BhojActivity.trackEvent('recipe_cooked', { recipeId: recipe.id, recipeName: recipe.title });
+                    markCookedBtn.innerHTML = '<i class="fa-solid fa-check"></i> Cooked';
+                    markCookedBtn.style.backgroundColor = 'var(--color-success)';
+                    markCookedBtn.style.borderColor = 'var(--color-success)';
+                    markCookedBtn.disabled = true;
+                } else {
+                    window.navigateTo('login');
+                }
+            });
+        }
+        
+        const updateView = () => {
+            countSpan.innerText = currentServings;
+            if (badgeCountSpan) badgeCountSpan.innerText = currentServings;
+            if (titleCountSpan) titleCountSpan.innerText = currentServings;
+            
+            const blocks = renderIngredientsBlock(currentServings);
+            if (summaryCont) summaryCont.innerHTML = blocks.pantrySummaryHtml;
+            if (listCont) listCont.innerHTML = blocks.ingredientsHtml;
+            if (recCont) recCont.innerHTML = blocks.recommendationReason;
+        };
 
         if (countSpan && minusBtn && plusBtn) {
             minusBtn.addEventListener('click', () => {
                 if (currentServings > 1) {
                     currentServings--;
-                    countSpan.innerText = currentServings;
-                    if (badgeCountSpan) badgeCountSpan.innerText = currentServings;
+                    updateView();
                 }
             });
             plusBtn.addEventListener('click', () => {
-                if (currentServings < 20) {
+                if (currentServings < 50) {
                     currentServings++;
-                    countSpan.innerText = currentServings;
-                    if (badgeCountSpan) badgeCountSpan.innerText = currentServings;
+                    updateView();
                 }
             });
         }
 
-        // Interactivity for Steps
         let completedSteps = 0;
         const progressSpan = document.getElementById('step-progress');
         const stepItems = document.querySelectorAll('.step-item');

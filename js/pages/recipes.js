@@ -14,10 +14,11 @@ window.renderRecipes = function(queryParam) {
 
     // State
     let currentFilter = 'all';
-    let searchQuery = searchIngredient || ''; // initialize search with param
+    let currentSort = 'recommended';
+    let searchQuery = searchIngredient || '';
 
     const updateView = () => {
-        const pantry = window.BhojInventory.get();
+        const pantry = window.BhojInventory ? window.BhojInventory.get() : [];
         const isEmpty = pantry.length === 0;
 
         if (isEmpty && !searchQuery) {
@@ -44,44 +45,58 @@ window.renderRecipes = function(queryParam) {
         }
 
         // Search logic using our new Recommendation engine
-        let allFiltered;
-        if (searchQuery) {
-            allFiltered = window.BhojRecommendation.searchRecipesByIngredient(searchQuery, pantry);
-            
-            // If absolute 0 found and we have a search term, GENERATE A FALLBACK RECIPE!
-            if (allFiltered.length === 0) {
-                const generated = window.BhojRecommendation.generateRecipeFromPantry(pantry, searchQuery);
-                
-                // Temporarily inject it into memory so if clicked, the detail page can find it!
-                // Since our SPA reloads the global state, we push it to BhojData.recipes
-                const existing = window.BhojData.recipes.find(r => r.id === generated.id);
-                if (!existing) {
-                    window.BhojData.recipes.push(generated);
-                }
-                
-                allFiltered = [generated];
-            }
-        } else {
-            allFiltered = window.BhojRecommendation.getRecommendedRecipes(pantry);
-        }
+        let allFiltered = window.BhojRecommendation.searchRecipes(searchQuery, pantry);
         
-        let filteredRecipes = allFiltered.filter(r => {
-            // Category Filter
-            if (currentFilter === 'quick' && parseInt(r.time) > 30) return false;
-            if (currentFilter === 'easy' && r.difficulty !== 'Easy') return false;
-            if (currentFilter === 'veg' && !r.tags.includes('Vegetarian')) return false;
-            if (currentFilter === 'expiring' && (!r.matchData || r.matchData.expiring.length === 0)) return false;
-            return true;
-        });
+        if (searchQuery && allFiltered.length === 0) {
+            const generated = window.BhojRecommendation.generateRecipeFromPantry(pantry, searchQuery);
+            const existing = window.BhojData.recipes.find(r => r.id === generated.id);
+            if (!existing) {
+                window.BhojData.recipes.push(generated);
+            }
+            allFiltered = [generated];
+        }
 
-        // Split into recommended and regular
-        const recommended = filteredRecipes.filter(r => r.score > 0 || r.isGenerated);
-        const regular = filteredRecipes.filter(r => (!r.score || r.score === 0) && !r.isGenerated);
+        // Filter by Category
+        allFiltered = window.BhojRecommendation.filterRecipesByCategory(allFiltered, currentFilter);
+        
+        // Sort
+        allFiltered = window.BhojRecommendation.sortRecipes(allFiltered, currentSort);
+
+        // Splitting into categories
+        let useSoonRecipes = [];
+        let bestPantryRecipes = [];
+        let otherRecipes = [];
+
+        if (!searchQuery && currentFilter === 'all' && currentSort === 'recommended') {
+            useSoonRecipes = window.BhojRecommendation.getUseSoonRecipes(allFiltered);
+            bestPantryRecipes = window.BhojRecommendation.getBestPantryRecipes(allFiltered).filter(r => !useSoonRecipes.includes(r));
+            otherRecipes = allFiltered.filter(r => !useSoonRecipes.includes(r) && !bestPantryRecipes.includes(r));
+        } else {
+            // If searching or filtering, just show them all in a standard list
+            otherRecipes = allFiltered;
+        }
 
         let title = searchQuery ? `Recipes using ${searchQuery}` : 'Recipes From Your Pantry';
         let subtitle = searchQuery 
             ? `Recipes you can make with ${searchQuery} and other pantry items.`
             : 'Cook something delicious with the food you already have.';
+
+        // Categories UI
+        const categories = [
+            { id: 'all', label: 'All' },
+            { id: 'quick', label: '⚡ Quick' },
+            { id: 'breakfast', label: '🍳 Breakfast' },
+            { id: 'lunch', label: '🍛 Lunch' },
+            { id: 'dinner', label: '🍽️ Dinner' },
+            { id: 'snacks', label: '🥨 Snacks' },
+            { id: 'desserts', label: '🍰 Desserts' },
+            { id: 'drinks', label: '🥤 Drinks' },
+            { id: 'vegetarian', label: '🥗 Vegetarian' }
+        ];
+
+        let filterHtml = categories.map(c => `
+            <button class="btn btn-outline ${currentFilter === c.id ? 'active' : ''}" data-filter="${c.id}">${c.label}</button>
+        `).join('');
 
         container.innerHTML = `
             <div class="container section-padding">
@@ -96,15 +111,21 @@ window.renderRecipes = function(queryParam) {
                     <input type="text" id="recipe-search" class="form-input" placeholder="Search recipes or ingredients..." value="${searchQuery}" style="max-width: 500px;">
                     
                     <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
-                        <button class="btn btn-outline ${currentFilter === 'all' ? 'active' : ''}" data-filter="all">All</button>
-                        <button class="btn btn-outline ${currentFilter === 'quick' ? 'active' : ''}" data-filter="quick">Quick (< 30m)</button>
-                        <button class="btn btn-outline ${currentFilter === 'easy' ? 'active' : ''}" data-filter="easy">Easy</button>
-                        <button class="btn btn-outline ${currentFilter === 'veg' ? 'active' : ''}" data-filter="veg">Vegetarian</button>
-                        <button class="btn btn-outline ${currentFilter === 'expiring' ? 'active' : ''}" data-filter="expiring">Uses Expiring Ingredients</button>
+                        ${filterHtml}
+                    </div>
+
+                    <div style="display: flex; align-items: center; gap: 10px; margin-top: 10px;">
+                        <span style="font-weight: 500; color: #666;">Sort By:</span>
+                        <select id="recipe-sort" class="form-input" style="width: auto; display: inline-block;">
+                            <option value="recommended" ${currentSort === 'recommended' ? 'selected' : ''}>Recommended</option>
+                            <option value="expiring" ${currentSort === 'expiring' ? 'selected' : ''}>Expiring Soon</option>
+                            <option value="pantry" ${currentSort === 'pantry' ? 'selected' : ''}>Most Pantry Ingredients</option>
+                            <option value="quickest" ${currentSort === 'quickest' ? 'selected' : ''}>Quickest</option>
+                        </select>
                     </div>
                 </div>
 
-                ${filteredRecipes.length === 0 ? `
+                ${allFiltered.length === 0 ? `
                     <div class="text-center" style="padding: 40px; color: #666; background: white; border-radius: 8px;">
                         <h3>We couldn't find a recipe matching your criteria.</h3>
                         <p style="margin-top: 10px;">Try adjusting your search or filters.</p>
@@ -112,22 +133,35 @@ window.renderRecipes = function(queryParam) {
                     </div>
                 ` : ''}
 
-                ${recommended.length > 0 ? `
-                    <div style="margin-bottom: 40px;">
-                        <h2 style="margin-bottom: 15px; display: flex; align-items: center; gap: 10px;">
-                            <span style="color: var(--color-accent);"><i class="fa-solid fa-fire"></i></span> Recommended For You
+                ${useSoonRecipes.length > 0 ? `
+                    <div style="margin-bottom: 50px;">
+                        <h2 style="margin-bottom: 15px; display: flex; align-items: center; gap: 10px; color: var(--color-danger);">
+                            <i class="fa-solid fa-fire"></i> Use These Soon
                         </h2>
+                        <p style="color: #666; margin-bottom: 20px;">These recipes use ingredients that are approaching expiry.</p>
                         <div class="grid grid-cols-3 gap-3">
-                            ${recommended.map(r => generateRecipeCard(r, true)).join('')}
+                            ${useSoonRecipes.map(r => generateRecipeCard(r, true)).join('')}
                         </div>
                     </div>
                 ` : ''}
 
-                ${regular.length > 0 ? `
-                    <div>
-                        <h2 style="margin-bottom: 15px;">Other Options</h2>
+                ${bestPantryRecipes.length > 0 ? `
+                    <div style="margin-bottom: 50px;">
+                        <h2 style="margin-bottom: 15px; display: flex; align-items: center; gap: 10px; color: var(--color-success);">
+                            <i class="fa-solid fa-utensils"></i> Best Recipes From Your Pantry
+                        </h2>
+                        <p style="color: #666; margin-bottom: 20px;">These recipes use the highest number of ingredients you already have.</p>
                         <div class="grid grid-cols-3 gap-3">
-                            ${regular.map(r => generateRecipeCard(r, false)).join('')}
+                            ${bestPantryRecipes.map(r => generateRecipeCard(r, true)).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+
+                ${otherRecipes.length > 0 ? `
+                    <div>
+                        <h2 style="margin-bottom: 15px;">${(useSoonRecipes.length > 0 || bestPantryRecipes.length > 0) ? 'More Options' : 'All Recipes'}</h2>
+                        <div class="grid grid-cols-3 gap-3">
+                            ${otherRecipes.map(r => generateRecipeCard(r, false)).join('')}
                         </div>
                     </div>
                 ` : ''}
@@ -139,35 +173,30 @@ window.renderRecipes = function(queryParam) {
 
     function generateRecipeCard(recipe, isRecommended = false) {
         let recommendationBadge = '';
-        let recommendationReason = '';
+        let recommendationReasonHtml = '';
         let matchDetails = '';
 
         if (recipe.isGenerated) {
             recommendationBadge = `<div style="position: absolute; top: 10px; left: 10px; background-color: var(--color-primary); color: white; padding: 4px 10px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.2);">✨ Generated Recipe</div>`;
-            recommendationReason = `
+            recommendationReasonHtml = `
                 <div style="background-color: var(--color-primary-bg); color: var(--color-primary); padding: 8px; border-radius: 4px; font-size: 0.85rem; font-weight: 600; margin-bottom: 15px; display: flex; gap: 8px; align-items: flex-start;">
                     <i class="fa-solid fa-wand-magic-sparkles" style="margin-top: 2px;"></i>
                     <span>Custom recipe generated for your search!</span>
                 </div>
             `;
-        } else if (isRecommended && recipe.matchData) {
-            recommendationBadge = `<div style="position: absolute; top: 10px; left: 10px; background-color: var(--color-accent); color: white; padding: 4px 10px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.2);">⭐ Recommended</div>`;
+        } else if (recipe.matchData && (recipe.matchData.matched.length > 0 || recipe.matchData.expiring.length > 0)) {
             
-            if (recipe.matchData.expiring.length > 0) {
-                let text = recipe.matchData.expiring.length === 1 
-                    ? `Recommended because ${recipe.matchData.expiring[0].pantryName} expires in ${recipe.matchData.expiring[0].daysRemaining} days` 
-                    : `Uses ${recipe.matchData.expiring.length} ingredients approaching expiry`;
-                recommendationReason = `
-                    <div style="background-color: var(--color-danger-bg); color: var(--color-danger); padding: 8px; border-radius: 4px; font-size: 0.85rem; font-weight: 600; margin-bottom: 15px; display: flex; gap: 8px; align-items: flex-start;">
-                        <i class="fa-solid fa-fire" style="margin-top: 2px;"></i>
-                        <span>${text}</span>
-                    </div>
-                `;
-            } else if (recipe.matchData.matched.length > 0) {
-                recommendationReason = `
-                    <div style="background-color: var(--color-success-bg); color: var(--color-success); padding: 8px; border-radius: 4px; font-size: 0.85rem; font-weight: 600; margin-bottom: 15px; display: flex; gap: 8px; align-items: flex-start;">
-                        <i class="fa-solid fa-check-circle" style="margin-top: 2px;"></i>
-                        <span>Uses ${recipe.matchData.matched.length} ingredients from your pantry</span>
+            if (isRecommended) {
+                recommendationBadge = `<div style="position: absolute; top: 10px; left: 10px; background-color: var(--color-accent); color: white; padding: 4px 10px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.2);">⭐ Recommended</div>`;
+            }
+
+            const dynamicReason = window.BhojRecommendation.generateRecommendationReason(recipe);
+            
+            if (dynamicReason) {
+                let isUrgent = dynamicReason.includes('🔥');
+                recommendationReasonHtml = `
+                    <div style="background-color: ${isUrgent ? 'var(--color-danger-bg)' : 'var(--color-success-bg)'}; color: ${isUrgent ? 'var(--color-danger)' : 'var(--color-success)'}; padding: 8px; border-radius: 4px; font-size: 0.85rem; font-weight: 600; margin-bottom: 15px; display: flex; gap: 8px; align-items: flex-start;">
+                        <span style="flex: 1;">${dynamicReason}</span>
                     </div>
                 `;
             }
@@ -177,6 +206,11 @@ window.renderRecipes = function(queryParam) {
                     <div style="margin-bottom: 5px;"><strong>Uses:</strong> 
                         ${recipe.matchData.matched.length > 0 ? recipe.matchData.matched.map(i => `<span style="color: var(--color-success);">✓ ${i}</span>`).join(', ') : 'None'}
                     </div>
+                    ${recipe.matchData.short.length > 0 ? `
+                        <div style="margin-bottom: 5px;"><strong>Short on:</strong> 
+                            ${recipe.matchData.short.map(i => `<span style="color: var(--color-warning);">⚠ ${i}</span>`).join(', ')}
+                        </div>
+                    ` : ''}
                     ${recipe.matchData.missing.length > 0 ? `
                         <div><strong>Missing:</strong> 
                             ${recipe.matchData.missing.map(i => `<span style="color: #999;">○ ${i}</span>`).join(', ')}
@@ -203,7 +237,7 @@ window.renderRecipes = function(queryParam) {
                     <h3 style="margin-bottom: 10px; cursor:pointer;" onclick="window.navigateTo('recipe-detail', '?id=${recipe.id}')">${recipe.title}</h3>
                     <p style="font-size: 0.9rem; color: #666; margin-bottom: 15px;">${recipe.description}</p>
                     
-                    ${recommendationReason}
+                    ${recommendationReasonHtml}
                     ${matchDetails}
                     
                     <div style="margin-top: auto;">
@@ -223,7 +257,6 @@ window.renderRecipes = function(queryParam) {
                 searchQuery = e.target.value;
                 updateView();
             });
-            // Focus cursor at end
             searchInput.focus();
             const val = searchInput.value;
             searchInput.value = '';
@@ -237,6 +270,14 @@ window.renderRecipes = function(queryParam) {
                 updateView();
             });
         });
+
+        const sortSelect = document.getElementById('recipe-sort');
+        if (sortSelect) {
+            sortSelect.addEventListener('change', (e) => {
+                currentSort = e.target.value;
+                updateView();
+            });
+        }
     }
 
     updateView();

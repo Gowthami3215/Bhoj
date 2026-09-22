@@ -255,6 +255,9 @@ window.renderPantry = function() {
                             Find Recipes
                         </button>
                         ` : ''}
+                        <button class="btn btn-primary" style="width: 100%; padding: 8px; margin-bottom: 8px; background-color: var(--color-success); border-color: var(--color-success);" data-action="used" data-id="${item.id}">
+                            <i class="fa-solid fa-check"></i> Mark as Used
+                        </button>
                         <div style="display: flex; gap: 8px;">
                             <button class="btn btn-outline" style="flex: 1; padding: 6px; font-size: 0.9rem;" data-action="edit" data-id="${item.id}">Edit</button>
                             <button class="btn btn-outline" style="flex: 1; padding: 6px; font-size: 0.9rem; color: var(--color-danger); border-color: #fca5a5;" data-action="delete" data-id="${item.id}">Delete</button>
@@ -320,6 +323,14 @@ window.renderPantry = function() {
                     
                     document.getElementById('edit-modal').classList.add('active');
                 }
+            }
+
+            
+            const usedBtn = e.target.closest('button[data-action="used"]');
+            if (usedBtn) {
+                const id = usedBtn.getAttribute('data-id');
+                window.BhojInventory.markItemAsUsed(id);
+                updateView();
             }
 
             if (deleteBtn) {

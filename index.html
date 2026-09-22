@@ -5,18 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bhoj - Eat Smart. Waste Less.</title>
     <meta name="description" content="Bhoj helps you track food expiry and discover recipes before food goes to waste.">
-    <!-- Google Fonts: Outfit -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <!-- FontAwesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Tesseract.js -->
     <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-    <!-- Navigation -->
     <nav class="navbar">
         <div class="nav-container">
             <a href="#home" class="logo" data-route="home">
@@ -35,41 +31,30 @@
                 <li><a href="#pantry" class="nav-link" data-route="pantry">My Pantry</a></li>
                 <li><a href="#recipes" class="nav-link" data-route="recipes">Recipes</a></li>
                 <li><a href="#impact" class="nav-link" data-route="impact">Impact</a></li>
+                
+                <li><a href="#login" class="nav-link" data-route="login">Login</a></li>
+                <li><a href="#register" class="nav-link" data-route="register">Register</a></li>
+                
                 <li><a href="#profile" class="nav-link profile-link" data-route="profile"><i class="fa-regular fa-circle-user"></i> Profile</a></li>
+                <li><a href="#" class="nav-link" id="nav-logout-btn" style="display: none;" onclick="window.BhojAuth.logoutUser(); window.updateNavigationUI(); window.navigateTo('home');"><i class="fa-solid fa-right-from-bracket"></i> Logout</a></li>
             </ul>
         </div>
     </nav>
 
-    <!-- Main Content Area -->
     <main id="app-content">
-        <!-- HOME PAGE -->
         <section id="view-home" class="page-view active"></section>
-
-        <!-- SCAN FOOD PAGE -->
         <section id="view-scan" class="page-view"></section>
-
-        <!-- PANTRY PAGE -->
         <section id="view-pantry" class="page-view"></section>
-
-        <!-- RECIPES PAGE -->
         <section id="view-recipes" class="page-view"></section>
-
-        <!-- RECIPE DETAILS PAGE -->
         <section id="view-recipe-detail" class="page-view"></section>
-
-        <!-- IMPACT PAGE -->
         <section id="view-impact" class="page-view"></section>
         
-        <!-- PROFILE PAGE (Placeholder) -->
-        <section id="view-profile" class="page-view">
-            <div class="container text-center" style="padding: 100px 20px;">
-                <h2>User Profile</h2>
-                <p>Profile features coming in Phase 2.</p>
-            </div>
-        </section>
+        <!-- Auth Views -->
+        <section id="view-login" class="page-view"></section>
+        <section id="view-register" class="page-view"></section>
+        <section id="view-profile" class="page-view"></section>
     </main>
 
-    <!-- Footer -->
     <footer class="footer">
         <div class="footer-container">
             <div class="footer-brand">
@@ -89,9 +74,9 @@
                 <div class="footer-col">
                     <h4>Company</h4>
                     <ul>
-                        <li><a href="javascript:void(0)" style="cursor: not-allowed; opacity: 0.7;" title="Coming soon">About Us</a></li>
-                        <li><a href="javascript:void(0)" style="cursor: not-allowed; opacity: 0.7;" title="Coming soon">Contact</a></li>
-                        <li><a href="javascript:void(0)" style="cursor: not-allowed; opacity: 0.7;" title="Coming soon">Privacy Policy</a></li>
+                        <li><a href="javascript:void(0)" style="cursor: not-allowed; opacity: 0.7;">About Us</a></li>
+                        <li><a href="javascript:void(0)" style="cursor: not-allowed; opacity: 0.7;">Contact</a></li>
+                        <li><a href="javascript:void(0)" style="cursor: not-allowed; opacity: 0.7;">Privacy Policy</a></li>
                     </ul>
                 </div>
                 <div class="footer-col">
@@ -109,17 +94,25 @@
         </div>
     </footer>
 
-    <!-- Scripts -->
+    <!-- Scripts (Auth must come before inventory) -->
     <script src="js/mockData.js"></script>
+    <script src="js/auth.js"></script>\n    <script src="js/activity.js"></script>
     <script src="js/inventory.js"></script>
     <script src="js/recommendation.js"></script>
     <script src="js/ocrParser.js"></script>
+    
     <script src="js/pages/home.js"></script>
     <script src="js/pages/scan.js"></script>
     <script src="js/pages/pantry.js"></script>
     <script src="js/pages/recipes.js"></script>
     <script src="js/pages/recipe-detail.js"></script>
     <script src="js/pages/impact.js"></script>
+    
+    <!-- Auth Pages -->
+    <script src="js/pages/login.js"></script>
+    <script src="js/pages/register.js"></script>
+    <script src="js/pages/profile.js"></script>
+    
     <script src="js/app.js"></script>
 </body>
 </html>

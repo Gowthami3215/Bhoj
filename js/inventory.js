@@ -1,30 +1,71 @@
 // LocalStorage Inventory Management
 
-const INVENTORY_KEY = 'bhoj_inventory';
+function getInventoryKey() {
+    const user = window.BhojAuth ? window.BhojAuth.getCurrentUser() : null;
+    if (user) {
+        return 'bhoj_inventory_' + user.id;
+    }
+    return 'bhoj_inventory_guest'; // Fallback just in case
+}
+
+function autoExpireItems(items) {
+    let changed = false;
+    const activeItems = [];
+    
+    items.forEach(item => {
+        const daysRemaining = calculateDaysRemaining(item.expiryDate);
+        if (daysRemaining < 0) {
+            // It expired! Track it and remove it.
+            if (window.BhojActivity) {
+                window.BhojActivity.trackEvent('food_expired', { itemId: item.id, itemName: item.name });
+            }
+            changed = true;
+        } else {
+            activeItems.push(item);
+        }
+    });
+
+    if (changed) {
+        const key = getInventoryKey();
+        localStorage.setItem(key, JSON.stringify(activeItems));
+    }
+    return activeItems;
+}
 
 function getInventory() {
-    const data = localStorage.getItem(INVENTORY_KEY);
-    return data ? JSON.parse(data) : [];
+    const key = getInventoryKey();
+    const data = localStorage.getItem(key);
+    let items = data ? JSON.parse(data) : [];
+    
+    // Check for auto-expiry
+    items = autoExpireItems(items);
+    return items;
 }
 
 function saveInventory(items) {
-    localStorage.setItem(INVENTORY_KEY, JSON.stringify(items));
+    const key = getInventoryKey();
+    localStorage.setItem(key, JSON.stringify(items));
 }
 
 function addInventoryItem(item) {
     const items = getInventory();
     
-    // Add default image if none provided
     if (!item.image) {
-        item.image = "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=300&q=80"; // generic grocery image
+        item.image = "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=300&q=80";
     }
     
-    items.push({
+    const newItem = {
         ...item,
         id: Date.now().toString(),
         addedAt: new Date().toISOString()
-    });
+    };
+    
+    items.push(newItem);
     saveInventory(items);
+
+    if (window.BhojActivity) {
+        window.BhojActivity.trackEvent('food_added', { itemId: newItem.id, itemName: newItem.name });
+    }
 }
 
 function updateInventoryItem(id, updatedData) {
@@ -40,6 +81,47 @@ function removeInventoryItem(id) {
     let items = getInventory();
     items = items.filter(item => item.id != id);
     saveInventory(items);
+}
+
+function markItemAsUsed(id) {
+    let items = getInventory();
+    const index = items.findIndex(item => item.id == id);
+    if (index !== -1) {
+        const item = items[index];
+        
+        // Track the usage
+        if (window.BhojActivity) {
+            window.BhojActivity.trackEvent('food_used', { 
+                itemId: item.id, 
+                itemName: item.name,
+                expiryDate: item.expiryDate 
+            });
+        }
+        
+        // Remove from active pantry
+        items.splice(index, 1);
+        saveInventory(items);
+    }
+}
+
+function migrateLegacyPantry(userId) {
+    const legacyData = localStorage.getItem('bhoj_inventory');
+    if (legacyData) {
+        try {
+            const items = JSON.parse(legacyData);
+            if (items && items.length > 0) {
+                const newKey = 'bhoj_inventory_' + userId;
+                const existingNewData = localStorage.getItem(newKey);
+                
+                if (!existingNewData || JSON.parse(existingNewData).length === 0) {
+                    localStorage.setItem(newKey, legacyData);
+                    localStorage.removeItem('bhoj_inventory');
+                }
+            }
+        } catch (e) {
+            console.error("Migration failed", e);
+        }
+    }
 }
 
 function loadDemoPantry() {
@@ -71,7 +153,8 @@ function loadDemoPantry() {
         };
     });
     
-    saveInventory(newItems);
+    // Add directly so we trigger the activity hooks
+    newItems.forEach(item => addInventoryItem(item));
 }
 
 function calculateDaysRemaining(expiryDateStr) {
@@ -106,7 +189,9 @@ window.BhojInventory = {
     add: addInventoryItem,
     update: updateInventoryItem,
     remove: removeInventoryItem,
+    markItemAsUsed: markItemAsUsed,
     loadDemo: loadDemoPantry,
     calculateDaysRemaining,
-    getExpiryStatus
+    getExpiryStatus,
+    migrateLegacyPantry
 };

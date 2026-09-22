@@ -15,8 +15,37 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Dynamic Navigation UI
+    window.updateNavigationUI = function() {
+        const isAuth = window.BhojAuth.isAuthenticated();
+        const profileLink = document.querySelector('.profile-link');
+        const loginLink = document.querySelector('[data-route="login"]');
+        const registerLink = document.querySelector('[data-route="register"]');
+        const pantryLink = document.querySelector('[data-route="pantry"]');
+        const logoutBtn = document.getElementById('nav-logout-btn');
+
+        if (isAuth) {
+            if (profileLink) profileLink.style.display = 'block';
+            if (pantryLink) pantryLink.style.display = 'block';
+            if (loginLink) loginLink.style.display = 'none';
+            if (registerLink) registerLink.style.display = 'none';
+            if (logoutBtn) logoutBtn.style.display = 'block';
+        } else {
+            if (profileLink) profileLink.style.display = 'none';
+            if (pantryLink) pantryLink.style.display = 'none';
+            if (loginLink) loginLink.style.display = 'block';
+            if (registerLink) registerLink.style.display = 'block';
+            if (logoutBtn) logoutBtn.style.display = 'none';
+        }
+    };
+
     // Routing function
     window.navigateTo = function(route, data = null) {
+        // Protect Routes
+        if ((route === 'pantry' || route === 'profile') && !window.BhojAuth.isAuthenticated()) {
+            route = 'login'; // Force redirect
+        }
+
         // Hide all views
         pageViews.forEach(view => {
             view.classList.remove('active');
@@ -43,11 +72,9 @@ document.addEventListener('DOMContentLoaded', () => {
             navMenu.classList.remove('active');
         }
 
-        // Update browser URL if navigating with query params
         if (typeof data === 'string' && data.startsWith('?')) {
             window.history.pushState({}, '', `${route}.html${data}`);
         } else {
-            // just a simple hash or path for SPA, keep it clean
             window.history.pushState({}, '', `#${route}`);
         }
 
@@ -57,13 +84,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (route === 'pantry' && window.renderPantry) window.renderPantry();
         if (route === 'recipes' && window.renderRecipes) window.renderRecipes(data);
         if (route === 'impact' && window.renderImpact) window.renderImpact();
-        
-        if (route === 'recipe-detail' && window.renderRecipeDetail) {
-            window.renderRecipeDetail(data); // Pass data (recipe ID) to detail page
-        }
+        if (route === 'recipe-detail' && window.renderRecipeDetail) window.renderRecipeDetail(data);
+        if (route === 'login' && window.renderLogin) window.renderLogin();
+        if (route === 'register' && window.renderRegister) window.renderRegister();
+        if (route === 'profile' && window.renderProfile) window.renderProfile();
 
         // Scroll to top
         window.scrollTo(0, 0);
+        window.updateNavigationUI();
     };
 
     // Add click listeners to all routing links
@@ -76,5 +104,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Initialize first view
+    window.updateNavigationUI();
     window.navigateTo('home');
 });

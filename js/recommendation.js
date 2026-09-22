@@ -63,7 +63,7 @@ window.BhojRecommendation = (function() {
             available: 0,
             missing: [],
             matched: [],
-            expiring: [], // Items expiring in <= 3 days
+            expiring: [], // Items expiring in <= 7 days
             percentage: 0
         };
 
@@ -81,7 +81,7 @@ window.BhojRecommendation = (function() {
                 result.matched.push(reqIng.name);
                 
                 const daysRem = window.BhojInventory.calculateDaysRemaining(match.expiryDate);
-                if (daysRem <= 3) {
+                if (daysRem <= 7) {
                     result.expiring.push({
                         name: reqIng.name,
                         pantryName: match.name,
@@ -100,32 +100,34 @@ window.BhojRecommendation = (function() {
     function calculateRecipeScore(recipe, pantry, searchQuery = "") {
         const matchData = getMatchingIngredients(recipe, pantry);
         
-        let score = matchData.percentage * 50; // base score (0 to 50 max)
+        let score = 0;
+        
+        // +20 for each pantry ingredient match
+        score += (matchData.available * 20);
         
         // Exact search query bonus
         if (searchQuery) {
             const qNorm = normalizeIngredientName(searchQuery);
             if (normalizeIngredientName(recipe.title).includes(qNorm)) {
                 score += 30;
-            }
-            if (recipe.ingredients.some(ing => areIngredientsRelated(ing.name, qNorm))) {
-                score += 20;
+            } else if (recipe.ingredients.some(ing => areIngredientsRelated(ing.name, qNorm))) {
+                score += 30; // +30 exact searched ingredient as requested
             }
         }
         
+        // Expiry scoring
         matchData.expiring.forEach(exp => {
-            if (exp.daysRemaining === 0) {
-                score += 30; // Very high priority
-            } else if (exp.daysRemaining === 1) {
-                score += 25; // Very high priority
+            if (exp.daysRemaining <= 1) {
+                score += 20; // +20 if an ingredient expires within 1 day (0 or 1)
             } else if (exp.daysRemaining <= 3) {
-                score += 15; // High priority
+                score += 10; // +10 if an ingredient expires within 3 days
             } else if (exp.daysRemaining <= 7) {
-                score += 5;  // Medium priority
+                score += 5;  // +5 if ingredient expires within 7 days
             }
         });
 
-        score -= (matchData.missing.length * 5); // Missing ingredient penalty
+        // -10 for each missing ingredient penalty
+        score -= (matchData.missing.length * 10);
 
         return {
             score,

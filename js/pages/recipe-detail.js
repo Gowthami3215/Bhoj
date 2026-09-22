@@ -112,8 +112,11 @@ window.renderRecipeDetail = function (queryParam) {
         </div>
     `;
 
-    // Why Bhoj Recommended This
     let recommendationReason = '';
+    
+    // Explicitly find matched names from processedIngredients
+    const matchedNames = processedIngredients.filter(i => i.isAvailable).map(i => i.name);
+    
     if (expiringCount > 0) {
         let msg = expiringCount === 1
             ? `Your ${expiringNames[0]} expires soon and this recipe uses it.`
@@ -127,11 +130,19 @@ window.renderRecipeDetail = function (queryParam) {
             </p>
         </div>`;
     } else if (availableCount > 0) {
+        // Build "Uses X, Y and Z available in your pantry."
+        let matchedStr = "";
+        if (matchedNames.length === 1) matchedStr = matchedNames[0];
+        else if (matchedNames.length === 2) matchedStr = matchedNames.join(' and ');
+        else {
+            matchedStr = matchedNames.slice(0, -1).join(', ') + ' and ' + matchedNames[matchedNames.length - 1];
+        }
+        
         recommendationReason = `
         <div style="background-color: var(--color-success-bg); padding: 20px; border-radius: var(--radius-md); margin-bottom: 30px; border-left: 4px solid var(--color-success);">
             <h4 style="color: #155724; margin-bottom: 10px;"><i class="fa-solid fa-lightbulb"></i> Why Bhoj Recommended This</h4>
             <p style="margin: 0; color: #155724; font-size: 0.95rem;">
-                This recipe matches ingredients commonly found in your pantry.
+                Uses ${matchedStr} available in your pantry.
             </p>
         </div>`;
     }
@@ -161,49 +172,28 @@ window.renderRecipeDetail = function (queryParam) {
     });
 
     function getRecipeVideo(recipe) {
-        const hasVideo = recipe.videoUrl && recipe.videoUrl !== '';
+        let videoUrl = recipe.videoUrl;
+        if (videoUrl && videoUrl.includes('youtube.com/watch?v=')) {
+            videoUrl = videoUrl.replace('watch?v=', 'embed/');
+            const ampersandPosition = videoUrl.indexOf('&');
+            if(ampersandPosition !== -1) {
+                videoUrl = videoUrl.substring(0, ampersandPosition);
+            }
+        }
+        
+        const hasVideo = videoUrl && videoUrl !== '' && videoUrl.includes('embed');
+
         if (hasVideo) {
             return `
                 <div style="position: relative; border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 30px; background-color: #000; box-shadow: var(--shadow-md); padding-top: 56.25%;">
-                    <iframe src="${recipe.videoUrl}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0;" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
+                    <iframe src="${videoUrl}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0;" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
                 </div>
             `;
         } else {
-            // Generate an AI Video making process (CSS Slideshow)
             return `
-                <div style="position: relative; border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 30px; background-color: #000; box-shadow: var(--shadow-md); padding-top: 56.25%;">
-                    
-                    <style>
-                        .ai-video-slide {
-                            position: absolute;
-                            top: 0;
-                            left: 0;
-                            width: 100%;
-                            height: 100%;
-                            object-fit: cover;
-                            opacity: 0;
-                            animation: fade-slides 15s infinite;
-                        }
-                        .ai-video-slide:nth-child(1) { animation-delay: 0s; }
-                        .ai-video-slide:nth-child(2) { animation-delay: 5s; }
-                        .ai-video-slide:nth-child(3) { animation-delay: 10s; }
-                        
-                        @keyframes fade-slides {
-                            0% { opacity: 0; transform: scale(1.05); }
-                            10% { opacity: 1; transform: scale(1); }
-                            33% { opacity: 1; transform: scale(1); }
-                            43% { opacity: 0; transform: scale(1.05); }
-                            100% { opacity: 0; transform: scale(1.05); }
-                        }
-                    </style>
-
-                    <img class="ai-video-slide" src="images/ai_video/prep.jpg" alt="Preparing ingredients">
-                    <img class="ai-video-slide" src="images/ai_video/cook.jpg" alt="Cooking process">
-                    <img class="ai-video-slide" src="images/ai_video/serve.jpg" alt="Plating the dish">
-                    
-                    <div style="position: absolute; bottom: 15px; left: 15px; background: rgba(0,0,0,0.7); color: white; padding: 6px 12px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; display: flex; align-items: center; gap: 8px; z-index: 10;">
-                        <i class="fa-solid fa-wand-magic-sparkles" style="color: #a855f7;"></i> AI Generated Making Process
-                    </div>
+                <div style="background-color: #f8f9fa; border: 1px solid #e9ecef; border-radius: var(--radius-lg); padding: 40px; text-align: center; margin-bottom: 30px; color: #6c757d;">
+                    <i class="fa-solid fa-video-slash" style="font-size: 2rem; margin-bottom: 10px; color: #adb5bd;"></i>
+                    <p style="margin: 0; font-weight: 500;">Detailed cooking video currently unavailable for this recipe.</p>
                 </div>
             `;
         }

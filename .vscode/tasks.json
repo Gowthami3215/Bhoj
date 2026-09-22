@@ -1,0 +1,33 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Start Local Server",
+            "type": "shell",
+            "command": "npx.cmd",
+            "args": [
+                "--yes",
+                "http-server",
+                "-p",
+                "8080",
+                "-c-1",
+                "."
+            ],
+            "isBackground": true,
+            "problemMatcher": {
+                "pattern": {
+                    "regexp": "^$"
+                },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "^.*Starting up http-server.*",
+                    "endsPattern": "^.*Available on.*"
+                }
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            }
+        }
+    ]
+}
